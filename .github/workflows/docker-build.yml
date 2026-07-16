@@ -16,13 +16,11 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout du code
         uses: actions/checkout@v4
 
       - name: Connexion à Docker Hub
-        # On ne se connecte que si ce n'est pas une pull request externe
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
