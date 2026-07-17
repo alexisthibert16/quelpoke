@@ -18,6 +18,8 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
 
     steps:
       - name: Checkout du code
@@ -54,3 +56,36 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    needs: build-and-push
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Authentification GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configuration gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Générer un token d'accès Artifact Registry
+        id: token
+        run: echo "token=$(gcloud auth print-access-token)" >> "$GITHUB_OUTPUT"
+
+      - name: Déploiement sur la VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.GCP_VM_IP }}
+          username: ${{ secrets.GCP_VM_USER }}
+          key: ${{ secrets.GCP_VM_SSH_KEY }}
+          envs: IMAGE
+          script: |
+            IMAGE="${{ env.ARTIFACT_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REPO_ID }}/${{ env.IMAGE_NAME }}:main"
+            echo "${{ steps.token.outputs.token }}" | docker login -u oauth2accesstoken --password-stdin https://${{ env.ARTIFACT_LOCATION }}-docker.pkg.dev
+            docker pull "$IMAGE"
+            docker stop quelpoke || true
+            docker rm quelpoke || true
+            docker run -d --name quelpoke -p 8080:8080 --restart unless-stopped "$IMAGE"
