@@ -1,5 +1,5 @@
-FROM debian                                 
-RUN apt update                              
-RUN apt install -y nginx                    
-COPY index.tmpl.html /var/www/html/              
-ENTRYPOINT ["nginx", "-g", "daemon off;"]  
+FROM golang:1.22-alpine
+WORKDIR /app
+COPY . .
+RUN go build -o quelpoke .
+CMD ["./quelpoke"]
